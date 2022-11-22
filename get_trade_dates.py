@@ -8,7 +8,6 @@ from util.bands import *
 import warnings
 warnings.filterwarnings(action='ignore')
 import pickle
-from pathlib import Path
 
 if __name__ == '__main__':
     pairs_list = [#('CJ', 'CJ4우(전환)'),
@@ -75,48 +74,15 @@ if __name__ == '__main__':
     print('Get All Pairs - done')
     selected_pairs_df = selection.get_selected_pairs()
     print('Get Selected Pairs - done')
-    selected_volume_pairs_df = selection.get_selected_pairs_volume()
-    print('Get Selected Pairs(volume) - done')
-    selected_volatility_pairs_df = selection.get_selected_pairs_volatility()
-    print('Get Selected Pairs(volatility) - done')
-    selected_volume_volatility_pairs_df = selection.get_selected_pairs_volume_volatility()
-    print('Get Selected Pairs(volume & volatility) - done')
     print()
 
-    # Save selected pairs dictionary
-    save_pickle0 = all_pairs_df['pairs'].to_dict()
-    save_pickle1 = selected_pairs_df['pairs'].to_dict()
-    save_pickle2 = selected_volume_pairs_df['pairs'].to_dict()
-    save_pickle3 = selected_volatility_pairs_df['pairs'].to_dict()
-    save_pickle4 = selected_volume_volatility_pairs_df['pairs'].to_dict()
-
-    with open('data/moving_pairs_all.pickle', 'wb') as fw:
-        pickle.dump(save_pickle0, fw)
-    with open('data/moving_pairs.pickle', 'wb') as fw:
-        pickle.dump(save_pickle1, fw)
-    with open('data/moving_pairs_volume.pickle', 'wb') as fw:
-        pickle.dump(save_pickle2, fw)
-    with open('data/moving_pairs_volatility.pickle', 'wb') as fw:
-        pickle.dump(save_pickle3, fw)
-    with open('data/moving_pairs_volume_volatility.pickle', 'wb') as fw:
-        pickle.dump(save_pickle4, fw)
-
     pairs_selection_method = ['No Condition',
-                              'ADF & Hurst',
-                              'ADF & Hurst & Volume',
-                              'ADF & Hurst & Volatility',
-                              'ADF & Hurst & Volume & Volatility']
+                              'ADF & Hurst']
 
     use = pairs_selection_method[0]
 
     if use == 'ADF & Hurst':
         moving_pairs = selected_pairs_df['pairs']
-    elif use == 'ADF & Hurst & Volume':
-        moving_pairs = selected_volume_pairs_df['pairs']
-    elif use == 'ADF & Hurst & Volatility':
-        moving_pairs = selected_volatility_pairs_df['pairs']
-    elif use == 'ADF & Hurst & Volume & Volatility':
-        moving_pairs = selected_volume_volatility_pairs_df['pairs']
     elif use == 'No Condition':
         moving_pairs = all_pairs_df['pairs']
 
@@ -159,22 +125,12 @@ if __name__ == '__main__':
             #trade_dates = get_trade_dates_bbd_m(sp, ub, lb, ub2, lb2, ma)
             #trade_dates = get_trade_dates_bb_long(sp, ub, lb)
             #trade_dates = get_trade_dates_bb_m_long(sp, lb, ma)
-            #trade_dates = get_trade_dates_bbd_long(sp, ub, lb, ub2, lb2)
-            trade_dates = get_trade_dates_bbd_m_long(sp, ub, lb, ub2, lb2, ma)
+            trade_dates = get_trade_dates_bbd_long(sp, ub, lb, ub2, lb2)
+            #trade_dates = get_trade_dates_bbd_m_long(sp, ub, lb, ub2, lb2, ma)
 
             trade_dates = trade_dates[(trade_dates.entry >= start) & (trade_dates.entry < end)].reset_index(drop=True)
 
             if len(trade_dates) > 0:
-                rets = []
-                for i in range(len(trade_dates)):
-                    second_ret = (second[trade_dates.entry[i]:
-                                         trade_dates.exit[i]].pct_change()[1:] + 1).cumprod()[-1] - 1
-                    first_ret = (first[trade_dates.entry[i]:
-                                       trade_dates.exit[i]].pct_change()[1:] + 1).cumprod()[-1] - 1
-                    ret = (second_ret-first_ret)*trade_dates.position.array[i]
-                    rets.append(ret)
-                rets = pd.Series(rets, index=trade_dates.exit)
-                trade_dates['ret'] = rets.reset_index(drop=True)
                 trade_dates_all_pairs.append(trade_dates)
                 used_pairs_list.append(using_pairs)
         trade_dates_all.append(trade_dates_all_pairs)
@@ -194,70 +150,5 @@ if __name__ == '__main__':
     all_trades_df = pd.concat(list_).reset_index(drop=True)
     all_trades_df = all_trades_df.sort_values(['entry', 'exit'])
 
-    cost = 0
-    all_trades_df['ret'] = all_trades_df['ret'] - cost
-
-    # Performances
 
     all_trades_df.to_csv("data/trades_df.csv")
-
-    rets_list_by_asset = []
-    cumsum_rets_list_by_asset = []
-    ret_by_asset = all_trades_df.groupby('asset').agg(
-        ['mean', 'var', 'sum', 'count'])['ret'].sort_values(
-        'mean', ascending=False)
-    for i in range(len(ret_by_asset.index)):
-        trade_by_asset = all_trades_df[all_trades_df.asset == ret_by_asset.index[i]]
-        rets_by_asset = trade_by_asset.set_index('exit').ret.rename(ret_by_asset.index[i])
-        cumsum_rets_by_asset = rets_by_asset.cumsum()
-        rets_list_by_asset.append(rets_by_asset)
-        cumsum_rets_list_by_asset.append(cumsum_rets_by_asset)
-
-    ret_by_asset = all_trades_df.groupby('asset').agg(
-        ['mean', 'var', 'sum', 'count'])['ret'].sort_values('mean',ascending=False)
-    print('realized return mean: ', ret_by_asset.mean()[0])
-
-    plt.figure(figsize=(20, 10))
-    plt.title('Realized returns')
-    plt.plot(all_trades_df.sort_values('exit')['exit'],
-             all_trades_df.sort_values('exit')['ret'])
-    plt.savefig('img/tmpimg_realized_returns.png')
-    plt.show()
-
-    plt.figure(figsize=(20, 10))
-    plt.title('Cumulative sum of realized returns')
-    plt.plot(all_trades_df.sort_values('exit')['exit'],
-             all_trades_df.sort_values('exit')['ret'].cumsum())
-    plt.savefig('img/tmpimg_cumsum_realized_returns.png')
-    plt.show()
-
-    plt.figure(figsize=(20, 10))
-    plt.plot(pd.concat(cumsum_rets_list_by_asset, axis=1).fillna(method='ffill'))
-    plt.legend(pd.concat(cumsum_rets_list_by_asset, axis=1).fillna(method='ffill'), loc='best')
-    plt.savefig('img/tmpimg_cumsum_realized_returns_by_asset.png')
-    plt.show()
-
-    the_pairs = all_trades_df['asset'].unique()
-    all_lines = []
-    for i in range(len(the_pairs)):
-        trades_by_asset = all_trades_df[all_trades_df.asset == the_pairs[i]]
-
-        lines = []
-        for t in trades_by_asset.index:
-            a_line = pd.DataFrame([(i + 1) * np.sign(trades_by_asset.ret)[t]] * 2,
-                                  index=[trades_by_asset.entry[t], trades_by_asset.exit[t]],
-                                  columns=[f'{the_pairs[i]}'])
-            lines.append(a_line)
-        all_lines.append(lines)
-
-    plt.figure(figsize=(20, 20))
-    plt.title('red:win, blue:loss')
-    for j in range(len(all_lines)):
-        for i in all_lines[j]:
-            if i.iloc[0, 0] < 0:
-                plt.plot(i * (-1), c='blue', linewidth=25)
-            else:
-                plt.plot(i, c='red', linewidth=25)
-    plt.yticks(ticks=range(1, 1 + len(all_lines)), labels=the_pairs)
-    plt.savefig('img/tmpimg_asset_open.png')
-    plt.show()

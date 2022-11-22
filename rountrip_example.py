@@ -16,9 +16,9 @@ if __name__ == '__main__':
 
     main_path = '/home/lululalamoon/CHO/chosta/data/k_stocks/daily/ohlcv'
 
-    initial_invest = 1_000_000_000
+    initial_invest = 1_100_000_000
     cash = 100_000_000
-    invest_money = (initial_invest-cash)/30
+    invest_money = (initial_invest-cash)/68
 
     all_transactions = []
 
