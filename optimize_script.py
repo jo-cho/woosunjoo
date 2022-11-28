@@ -16,7 +16,7 @@ warnings.filterwarnings(action='ignore')
 pairs_list = [#('CJ', 'CJ4우(전환)'),
  ('CJ', 'CJ우'),
  ('CJ제일제당', 'CJ제일제당 우'),
- ('DB하이텍', 'DB하이텍1우'),
+ #('DB하이텍', 'DB하이텍1우'),
  #('DL이앤씨', 'DL이앤씨2우(전환)'),
  #('DL이앤씨', 'DL이앤씨우'),
  ('GS', 'GS우'),
@@ -88,13 +88,14 @@ if __name__ == "__main__":
         second = pairs_prices.dropna().iloc[:, 1]  # 우선주
         spread = get_log_spread(first, second)  # lny-lnx
 
+        # 최적 파라미터 window 정하기
         last_invens = []
         windows = [10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60]
         for win in windows:
             # make bands
             window = win
             mult = 2
-            mult2 = 2.5
+            mult2 = 3
             df_bb = bollinger_bands_double(spread, window, mult, mult2).dropna()
 
             sp, lb, ub, ma = df_bb.price, df_bb.lb, df_bb.ub, df_bb.MA
@@ -106,11 +107,11 @@ if __name__ == "__main__":
             # trade_dates = get_trade_dates_bb_long(sp, ub, lb)
             trade_dates = get_trade_dates_bbd_long(sp, ub, lb, ub2, lb2)
 
-            initial_invest = 200_000_000
-            c = 0.002  # 거래당
+            initial_invest = 100_000_000
+            c = 0.002  # 거래비
             transactions_list = []
 
-            inventory_now = initial_invest
+            inventory_now = 0
             inventory_history = [inventory_now]
 
             trade_dates_is = trade_dates.loc[(trade_dates.entry > '2009-1-1') & (trade_dates.entry < '2017-1-1')] # in-sample
@@ -125,8 +126,8 @@ if __name__ == "__main__":
                 p2_in = second[entry]
                 p1_out = first[exit]
                 p2_out = second[exit]
-                q1 = int(inventory_now / (2 * p1_in))
-                q2 = int(inventory_now / (2 * p2_in))
+                q1 = int(initial_invest / (2 * p1_in))
+                q2 = int(initial_invest / (2 * p2_in))
 
                 one_transaction = [[entry, -pos * q1, p1_in, common],
                                    [entry, pos * q2, p2_in, preferred],
@@ -155,15 +156,12 @@ if __name__ == "__main__":
             inventory = inventory.to_frame().rename(
                 columns={0: common + ' & ' + preferred})
 
-            if np.any(inventory <= 0):
-                from_ind_ = inventory[inventory.iloc[:, 0] <= 0].index[0]
-                inventory.loc[from_ind_:, :] = 0
-
             last_invens.append(inventory.iloc[-1, 0])
         opt_window = windows[np.argmax(np.array(last_invens))]
         opt_window_list.append(opt_window)
         print(common, '&', preferred, "'s Optimal window: ", opt_window)
-
+    
+    # 최적 파라미터로 인샘플 결과 보기용
     for i in range(len(pairs_list)):
 
         common = pairs_list[i][0]
@@ -180,29 +178,32 @@ if __name__ == "__main__":
 
         last_invens = []
 
-        # make bands
+        # 밴드 생성
         window = opt_window_list[i]
         mult = 2
-        mult2 = 2.5
+        mult2 = 3
         df_bb = bollinger_bands_double(spread, window, mult, mult2).dropna()
 
         sp, lb, ub, ma = df_bb.price, df_bb.lb, df_bb.ub, df_bb.MA
         lb2, ub2 = df_bb.lb2, df_bb.ub2
 
+        ## 볼린저 밴드로 진입, 청산 규칙 생성
+        ## 볼린저 룰 선택
         # trade_dates = get_trade_dates_bbd_m(sp, ub, lb, ub2, lb2, ma)
         # trade_dates = get_trade_dates_bbd_m_long(sp, ub, lb, ub2, lb2, ma)
         # trade_dates = get_trade_dates_bb_m_long(sp, lb, ma)
         # trade_dates = get_trade_dates_bb_long(sp, ub, lb)
         trade_dates = get_trade_dates_bbd_long(sp, ub, lb, ub2, lb2)
 
-        initial_invest = 200_000_000
-        c = 0.002  # 거래당
+        initial_invest = 100_000_000 #매매 투자금
+        c = 0.002  # 거래비용
         transactions_list = []
 
-        inventory_now = initial_invest
+        inventory_now = 0
         inventory_history = [inventory_now]
 
         trade_dates_is = trade_dates.loc[(trade_dates.entry > '2009-1-1') & (trade_dates.entry < '2017-1-1')] # in-sample
+        trade_dates_is = trade_dates_is.reset_index(drop=True)
 
         for t in trade_dates_is.index:  # t는 하나의 round-trip
             entry = pd.to_datetime(trade_dates_is.entry[t])
@@ -214,8 +215,8 @@ if __name__ == "__main__":
             p2_in = second[entry]
             p1_out = first[exit]
             p2_out = second[exit]
-            q1 = int(inventory_now / (2 * p1_in))
-            q2 = int(inventory_now / (2 * p2_in))
+            q1 = int(initial_invest / (2 * p1_in))
+            q2 = int(initial_invest / (2 * p2_in))
 
             one_transaction = [[entry, -pos * q1, p1_in, common],
                                [entry, pos * q2, p2_in, preferred],
@@ -244,10 +245,6 @@ if __name__ == "__main__":
         inventory = inventory.to_frame().rename(
             columns={0: common + ' & ' + preferred})
 
-        if np.any(inventory <= 0):
-            from_ind_ = inventory[inventory.iloc[:, 0] <= 0].index[0]
-            inventory.loc[from_ind_:, :] = 0
-
         all_transactions.append(transactions)
         all_inventories.append(inventory)
 
@@ -257,7 +254,7 @@ if __name__ == "__main__":
         i = all_inventories[n]
         axs[n].yaxis.set_major_formatter(
             ticker.FuncFormatter(lambda i,
-                                        pos: '{:,.2f}'.format(i / 200_000_000) + '억원'))
+                                        pos: '{:,.2f}'.format(i / 100_000_000) + '억원'))
         axs[n].plot(i)
         axs[n].legend(i)
     f.tight_layout()
@@ -267,15 +264,17 @@ if __name__ == "__main__":
     inv_sum = pd.concat(all_inventories, axis=1).fillna(method='ffill').fillna(method='bfill').sum(axis=1)
 
     f, ax = plt.subplots(1, figsize=(10, 6))
-    f.suptitle('optimal windows (in-sample): 전체 Inventory 초기투자금 31억 (각 페어 당 초기투자금 1억 x 31개 페어), cost=20bp')
+    f.suptitle('optimal windows (in-sample): 전체 Inventory 초기투자금 30억 (각 페어 당 초기투자금 1억 x 30개 페어), cost=20bp')
     ax.yaxis.set_major_formatter(
         ticker.FuncFormatter(lambda inv_sum,
-                                    pos: '{:,.2f}'.format(inv_sum / 200_000_000) + '억원'))
+                                    pos: '{:,.2f}'.format(inv_sum / 100_000_000) + '억원'))
     ax.plot(inv_sum)
     f.tight_layout()
     plt.savefig('img/inven_sum_opt_is.png')
     plt.show()
 
+    # Out-of-Sample 결과
+    
     all_transactions = []
     all_inventories = []
     for i in range(len(pairs_list)):
@@ -295,7 +294,7 @@ if __name__ == "__main__":
         # make bands
         window = opt_window_list[i]
         mult = 2
-        mult2 = 2.5
+        mult2 = 3
         df_bb = bollinger_bands_double(spread, window, mult, mult2).dropna()
 
         sp, lb, ub, ma = df_bb.price, df_bb.lb, df_bb.ub, df_bb.MA
@@ -307,11 +306,11 @@ if __name__ == "__main__":
         # trade_dates = get_trade_dates_bb_long(sp, ub, lb)
         trade_dates = get_trade_dates_bbd_long(sp, ub, lb, ub2, lb2)
 
-        initial_invest = 200_000_000
+        initial_invest = 100_000_000
         c = 0.002  # 거래당
         transactions_list = []
 
-        inventory_now = initial_invest
+        inventory_now = 0
         inventory_history = [inventory_now]
 
         trade_dates_oos = trade_dates.loc[(trade_dates.entry > '2009-1-1') & (trade_dates.entry < '2023-1-1')] # 전체
@@ -326,8 +325,8 @@ if __name__ == "__main__":
             p2_in = second[entry]
             p1_out = first[exit]
             p2_out = second[exit]
-            q1 = int(inventory_now / (2 * p1_in))
-            q2 = int(inventory_now / (2 * p2_in))
+            q1 = int(initial_invest / (2 * p1_in))
+            q2 = int(initial_invest / (2 * p2_in))
 
             one_transaction = [[entry, -pos * q1, p1_in, common],
                                [entry, pos * q2, p2_in, preferred],
@@ -356,10 +355,6 @@ if __name__ == "__main__":
         inventory = inventory.to_frame().rename(
             columns={0: common + ' & ' + preferred})
 
-        if np.any(inventory <= 0):
-            from_ind_ = inventory[inventory.iloc[:, 0] <= 0].index[0]
-            inventory.loc[from_ind_:, :] = 0
-
         all_transactions.append(transactions)
         all_inventories.append(inventory)
 
@@ -369,7 +364,7 @@ if __name__ == "__main__":
         i = all_inventories[n]
         axs[n].yaxis.set_major_formatter(
             ticker.FuncFormatter(lambda i,
-                                        pos: '{:,.2f}'.format(i / 200_000_000) + '억원'))
+                                        pos: '{:,.2f}'.format(i / 100_000_000) + '억원'))
         axs[n].plot(i)
         axs[n].legend(i)
         axs[n].axvline(pd.DatetimeIndex(['2017-1-1']), color='red')
@@ -380,10 +375,10 @@ if __name__ == "__main__":
     inv_sum = pd.concat(all_inventories, axis=1).fillna(method='ffill').fillna(method='bfill').sum(axis=1)
 
     f, ax = plt.subplots(1, figsize=(10, 6))
-    f.suptitle('optimal windows (OOS): 전체 Inventory 초기투자금 31억 (각 페어 당 초기투자금 1억 x 31개 페어), cost=20bp')
+    f.suptitle('optimal windows (OOS): 전체 Inventory 초기투자금 30억 (각 페어 당 초기투자금 1억 x 30개 페어), cost=20bp')
     ax.yaxis.set_major_formatter(
         ticker.FuncFormatter(lambda inv_sum,
-                                    pos: '{:,.2f}'.format(inv_sum / 200_000_000) + '억원'))
+                                    pos: '{:,.2f}'.format(inv_sum / 100_000_000) + '억원'))
     ax.plot(inv_sum)
     f.tight_layout()
     plt.axvline(pd.DatetimeIndex(['2017-1-1']), color='red')

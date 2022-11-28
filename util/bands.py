@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 
+
 def bollinger_bands(price, n, m):
     """
     :param price:(pd.Series)
@@ -19,6 +20,7 @@ def bollinger_bands(price, n, m):
     df = df.join(BL)
     df = df.join(BM)
     return df
+
 
 def bollinger_bands_double(price, n, m1, m2):
     """
@@ -42,6 +44,7 @@ def bollinger_bands_double(price, n, m1, m2):
     df = df.join(BL2)
     df = df.join(BM)
     return df
+
 
 def rsi_bands(price, period, up=70, down=30, bands=True):
     """
@@ -72,3 +75,14 @@ def rsi_bands(price, period, up=70, down=30, bands=True):
     if bands is False:
         rsi_df = rsi_df[['rsi']]
     return rsi_df
+
+
+def sma_df(price, window_1, window_2, window_3):
+    df = price.rename('price').to_frame()
+    first = price.rolling(window_1).mean()
+    second = price.rolling(window_2).mean()
+    third = price.rolling(window_3).mean()
+    df[f'ma_{window_1}'] = first
+    df[f'ma_{window_2}'] = second
+    df[f'ma_{window_3}'] = third
+    return df
