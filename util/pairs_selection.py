@@ -40,10 +40,10 @@ class PairsSelection:
         self._threshold_adf = threshold_adf
         self._threshold_hurst = threshold_hurst
         pairs_prices_list = self.pairs_prices_list
-        all_dates = pairs_prices_list[0].index
-        for n in range(0, len(all_dates[2217:]), step):  # 대략 2009년부터
-            start = all_dates[2217+n-lookback]
-            end = all_dates[2217+n]
+        all_dates = pd.concat(pairs_prices_list, axis=1).dropna().index
+        for n in range(lookback, len(all_dates), step):
+            start = all_dates[n-lookback]
+            end = all_dates[n]
             selected_pairs = get_mean_reverting_pairs(
                 pairs_prices_list,
                 start,
@@ -56,129 +56,24 @@ class PairsSelection:
         self._selected_pairs_df = selected_pairs_df
         return selected_pairs_df
 
-    def get_preferred_volume(self):
-        pairs_list = self._pairs_list
-        preferred_volume_df = pd.DataFrame()
-        for i in range(len(pairs_list)):
-            preferred_ = pairs_list[i][1]
-            preferred_volume_ = self._ohlcv_dict[preferred_]['거래량']
-            preferred_volume_df[f"{pairs_list[i][1]}"] = preferred_volume_
-        return preferred_volume_df
-
-    def get_selected_pairs_volume(self, lookback=100, step=120,
-                                  threshold_adf=0.10, threshold_hurst=0.40):
-        # 거래량 많은 페어
-        new_selected_pairs_list = []
+    def get_top_hurst_pairs(self, start_date='2009-1-1',
+                            lookback=100, step=120,
+                            top_n=5):
+        selected_pairs_list = []
+        top_pairs_list = []
         test_index_list = []
-        self._threshold_adf = threshold_adf
-        self._threshold_hurst = threshold_hurst
         pairs_prices_list = self.pairs_prices_list
-        preferred_volume_df = self.get_preferred_volume()
-        preferred_volume_df.drop(columns={'삼성전자우'}, inplace=True)
-        all_dates = pairs_prices_list[0].index
-        for n in range(0, len(all_dates[2217:]), step):
-            start = all_dates[2217 + n - lookback]
-            end = all_dates[2217 + n]
-            selected_pairs = get_mean_reverting_pairs(
-                pairs_prices_list,
-                start,
-                end,
-                threshold_adf,
-                threshold_hurst)
-            avg_volume_l = []
-            for i in range(len(selected_pairs)):
-                preferred_ = selected_pairs[i][1]
-                avg_volume = self._ohlcv_dict[preferred_]['거래량'][start:end].mean()
-                avg_volume_l.append(avg_volume)
-            d_volume_dict = dict(zip(selected_pairs, avg_volume_l))
-            d_volume_df = pd.DataFrame(d_volume_dict, index=['avg daily volume']).T
-            new_selected_pairs = list(
-                d_volume_df[d_volume_df['avg daily volume'] >=
-                            preferred_volume_df[start:end].mean().mean()].index)
-
-            new_selected_pairs_list.append(new_selected_pairs)
+        all_dates = pd.concat(pairs_prices_list, axis=1)[start_date:].dropna().index
+        for n in range(lookback, len(all_dates), step):
+            start = all_dates[n-lookback]
+            end = all_dates[n]
+            selected_pairs, hurst_dict = get_pairs_hurst(pairs_prices_list, start, end, threshold=1)
+            top_pairs = list(pd.DataFrame(hurst_dict, index=['Hurst']).T.sort_values('Hurst').index[:top_n])
+            top_pairs_list.append(top_pairs)
             test_index_list.append(end)
-
-        selected_volume_pairs_df = pd.DataFrame({'pairs': new_selected_pairs_list}, index=test_index_list)
-        self._selected_volume_pairs_df = selected_volume_pairs_df
-        return selected_volume_pairs_df
-
-    def get_selected_pairs_volatility(self, lookback=100, step=120,
-                                      threshold_adf=0.10, threshold_hurst=0.40):
-        # 변동성 작은 페어
-        new_selected_pairs_list = []
-        test_index_list = []
-        self._threshold_adf = threshold_adf
-        self._threshold_hurst = threshold_hurst
-        pairs_prices_list = self.pairs_prices_list
-        all_dates = pairs_prices_list[0].index
-        for n in range(0, len(all_dates[2217:]), step):
-            start = all_dates[2217 + n - lookback]
-            end = all_dates[2217 + n]
-            threshold_adf = 0.1
-            threshold_hurst = 0.4
-            selected_pairs = get_mean_reverting_pairs(
-                pairs_prices_list,
-                start,
-                end,
-                threshold_adf,
-                threshold_hurst)
-            new_selected_pairs = []
-            for i in range(len(selected_pairs)):
-                preferred_ = selected_pairs[i][1]
-                vol = self._ohlcv_dict[preferred_]['종가'][start:end].pct_change().std()
-                if vol < 0.02:
-                    new_selected_pairs.append(selected_pairs[i])
-            new_selected_pairs_list.append(new_selected_pairs)
-            test_index_list.append(end)
-        selected_volatility_pairs_df = pd.DataFrame({'pairs': new_selected_pairs_list}, index=test_index_list)
-        self._selected_volatility_pairs_df = selected_volatility_pairs_df
-        return selected_volatility_pairs_df
-
-    def get_selected_pairs_volume_volatility(self, lookback=100, step=120,
-                                             threshold_adf=0.10, threshold_hurst=0.40):
-        # 변동성 작은 페어
-        new_selected_pairs_list = []
-        test_index_list = []
-        self._threshold_adf = threshold_adf
-        self._threshold_hurst = threshold_hurst
-        preferred_volume_df = self.get_preferred_volume()
-        preferred_volume_df.drop(columns={'삼성전자우'}, inplace=True)
-        pairs_prices_list = self.pairs_prices_list
-        all_dates = pairs_prices_list[0].index
-        for n in range(0, len(all_dates[2217:]), step):
-            start = all_dates[2217 + n - lookback]
-            end = all_dates[2217 + n]
-            threshold_adf = 0.1
-            threshold_hurst = 0.4
-            selected_pairs = get_mean_reverting_pairs(
-                pairs_prices_list,
-                start,
-                end,
-                threshold_adf,
-                threshold_hurst)
-            avg_volume_l = []
-            for i in range(len(selected_pairs)):
-                preferred_ = selected_pairs[i][1]
-                avg_volume = self._ohlcv_dict[preferred_]['거래량'][start:end].mean()
-                avg_volume_l.append(avg_volume)
-            d_volume_dict = dict(zip(selected_pairs, avg_volume_l))
-            d_volume_df = pd.DataFrame(d_volume_dict, index=['avg daily volume']).T
-            volume_selected_pairs = list(
-                d_volume_df[d_volume_df['avg daily volume'] >=
-                            preferred_volume_df[start:end].mean().mean()].index)
-            new_selected_pairs = []
-            for i in range(len(volume_selected_pairs)):
-                preferred_ = volume_selected_pairs[i][1]
-                vol = self._ohlcv_dict[preferred_]['종가'][start:end].pct_change().std()
-                if vol < 0.02:
-                    new_selected_pairs.append(volume_selected_pairs[i])
-            new_selected_pairs_list.append(new_selected_pairs)
-            test_index_list.append(end)
-
-        selected_volume_volatility_pairs_df = pd.DataFrame({'pairs': new_selected_pairs_list}, index=test_index_list)
-        self._selected_volume_volatility_pairs_df = selected_volume_volatility_pairs_df
-        return selected_volume_volatility_pairs_df
+        selected_pairs_df = pd.DataFrame({'pairs':top_pairs_list}, index=test_index_list)
+        self._selected_pairs_df = selected_pairs_df
+        return selected_pairs_df
 ##-------------------------------##
 
 
@@ -252,7 +147,7 @@ def get_pairs_adf_test(pairs_prices_list, start, end, threshold=0.05, coint_spre
     return selected_spread_dict
 
 
-def get_pairs_hurst(pairs_prices_list, start, end, threshold=0.4, coint_spread=False):
+def get_pairs_hurst(pairs_prices_list, start, end, threshold=0.4):
     """
     :param pairs_prices_list: a list of DataFrame's of two assets' price
     :param start: Date
@@ -266,8 +161,6 @@ def get_pairs_hurst(pairs_prices_list, start, end, threshold=0.4, coint_spread=F
         first = np.log(pairs_prices_list[i][start:end].dropna().iloc[:,0])
         second = np.log(pairs_prices_list[i][start:end].dropna().iloc[:,1])
         spread = get_log_spread(first, second)
-        if coint_spread is True:
-            spread = get_coint_spread(first, second)
         spread_list.append(spread)
         c_ = pairs_prices_list[i].columns
         pairs_name = (c_[0], c_[1])
@@ -286,7 +179,7 @@ def get_pairs_hurst(pairs_prices_list, start, end, threshold=0.4, coint_spread=F
         selected_spread = spread_dict[selected_pairs[i]]
         selected_spread_list.append(selected_spread)
     selected_spread_dict = dict(zip(selected_pairs, selected_spread_list))
-    return selected_spread_dict
+    return selected_spread_dict, hurst_dict
 
 
 def get_mean_reverting_pairs(pairs_prices_list, start, end, threshold_adf, threshold_hurst):

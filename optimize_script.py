@@ -13,7 +13,7 @@ warnings.filterwarnings(action='ignore')
 # 페어 선정 없는 버전
 
 # Data load
-pairs_list = [#('CJ', 'CJ4우(전환)'),
+pairs_list_30 = [#('CJ', 'CJ4우(전환)'),
  ('CJ', 'CJ우'),
  ('CJ제일제당', 'CJ제일제당 우'),
  #('DB하이텍', 'DB하이텍1우'),
@@ -58,6 +58,14 @@ pairs_list = [#('CJ', 'CJ4우(전환)'),
  ('현대차', '현대차우'),
  ('호텔신라', '호텔신라우')]
 
+pairs_list_5 = [('LG전자', 'LG전자우'),
+                ('LG화학', 'LG화학우'),
+                ('삼성전자', '삼성전자우'),
+                ('삼성화재', '삼성화재우'),
+                ('현대차', '현대차우')]
+
+pairs_list = pairs_list_30
+
 if __name__ == "__main__":
     main_path = '/home/lululalamoon/CHO/chosta/data/k_stocks/daily/ohlcv'
     ohlcv_list = []
@@ -95,7 +103,7 @@ if __name__ == "__main__":
             # make bands
             window = win
             mult = 2
-            mult2 = 3
+            mult2 = 4
             df_bb = bollinger_bands_double(spread, window, mult, mult2).dropna()
 
             sp, lb, ub, ma = df_bb.price, df_bb.lb, df_bb.ub, df_bb.MA
@@ -181,7 +189,7 @@ if __name__ == "__main__":
         # 밴드 생성
         window = opt_window_list[i]
         mult = 2
-        mult2 = 3
+        mult2 = 4
         df_bb = bollinger_bands_double(spread, window, mult, mult2).dropna()
 
         sp, lb, ub, ma = df_bb.price, df_bb.lb, df_bb.ub, df_bb.MA
@@ -249,7 +257,7 @@ if __name__ == "__main__":
         all_inventories.append(inventory)
 
     f, axs = plt.subplots(len(all_inventories), figsize=(10, 2 * len(all_inventories)))
-    f.suptitle('optimal windows (in-sample): inventory (각 초기 1억), cost=20bp')
+    f.suptitle('optimal params (in-sample) 실현 손익, cost=20bp')
     for n in range(len(all_inventories)):
         i = all_inventories[n]
         axs[n].yaxis.set_major_formatter(
@@ -264,7 +272,8 @@ if __name__ == "__main__":
     inv_sum = pd.concat(all_inventories, axis=1).fillna(method='ffill').fillna(method='bfill').sum(axis=1)
 
     f, ax = plt.subplots(1, figsize=(10, 6))
-    f.suptitle('optimal windows (in-sample): 전체 Inventory 초기투자금 30억 (각 페어 당 초기투자금 1억 x 30개 페어), cost=20bp')
+    f.suptitle('optimal params (in-sample): 실현손익, cost=20bp')
+    ax.set_title('각 페어 당 6억 x Top 5 시가총액 페어 (2년 주기로 재선정)')
     ax.yaxis.set_major_formatter(
         ticker.FuncFormatter(lambda inv_sum,
                                     pos: '{:,.2f}'.format(inv_sum / 100_000_000) + '억원'))
@@ -294,7 +303,7 @@ if __name__ == "__main__":
         # make bands
         window = opt_window_list[i]
         mult = 2
-        mult2 = 3
+        mult2 = 4
         df_bb = bollinger_bands_double(spread, window, mult, mult2).dropna()
 
         sp, lb, ub, ma = df_bb.price, df_bb.lb, df_bb.ub, df_bb.MA
@@ -313,7 +322,7 @@ if __name__ == "__main__":
         inventory_now = 0
         inventory_history = [inventory_now]
 
-        trade_dates_oos = trade_dates.loc[(trade_dates.entry > '2009-1-1') & (trade_dates.entry < '2023-1-1')] # 전체
+        trade_dates_oos = trade_dates.loc[(trade_dates.entry > '2009-1-1') & (trade_dates.entry < '2022-1-1')] # 전체
 
         for t in trade_dates_oos.index:  # t는 하나의 round-trip
             entry = pd.to_datetime(trade_dates_oos.entry[t])
@@ -359,7 +368,8 @@ if __name__ == "__main__":
         all_inventories.append(inventory)
 
     f, axs = plt.subplots(len(all_inventories), figsize=(10, 2 * len(all_inventories)))
-    f.suptitle('optimal windows (OOS): inventory (각 초기 1억), cost=20bp')
+    f.suptitle('optimal params: 실현손익, cost=20bp')
+    ax.set_title('각 페어 당 1억 x 30개 페어')
     for n in range(len(all_inventories)):
         i = all_inventories[n]
         axs[n].yaxis.set_major_formatter(
@@ -375,7 +385,8 @@ if __name__ == "__main__":
     inv_sum = pd.concat(all_inventories, axis=1).fillna(method='ffill').fillna(method='bfill').sum(axis=1)
 
     f, ax = plt.subplots(1, figsize=(10, 6))
-    f.suptitle('optimal windows (OOS): 전체 Inventory 초기투자금 30억 (각 페어 당 초기투자금 1억 x 30개 페어), cost=20bp')
+    f.suptitle('실현손익 (optimal params), cost=20bp')
+    ax.set_title('각 페어 당 1억 x 30개 페어')
     ax.yaxis.set_major_formatter(
         ticker.FuncFormatter(lambda inv_sum,
                                     pos: '{:,.2f}'.format(inv_sum / 100_000_000) + '억원'))
@@ -384,3 +395,8 @@ if __name__ == "__main__":
     plt.axvline(pd.DatetimeIndex(['2017-1-1']), color='red')
     plt.savefig('img/inven_sum_opt_oos.png')
     plt.show()
+
+    ror = (inv_sum[-1]/13)/3_000_000_000
+    is_ror = (inv_sum[:'2017-1-1'][-1] / 8) / 3_000_000_000
+    oos_ror = ((inv_sum['2017-1-1':][-1] - inv_sum['2017-1-1':][0])/ 6) / 3_000_000_000
+    print(ror, is_ror, oos_ror)
